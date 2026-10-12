@@ -1,3 +1,108 @@
+# Bitaxe BTC Price Screen
+
+A small fork of [ESP-Miner](https://github.com/bitaxeorg/ESP-Miner) **v2.15.3**, the firmware that runs the Bitaxe. It adds a **BTC price screen** to the OLED display, showing the current price and the 24h change:
+
+```
+BTC Price:
+$82,380
+↓ 1.64% (24h)
+```
+
+> Not an official Bitaxe/OSMU release. Apart from the changes listed below, this is stock ESP-Miner v2.15.3. Use at your own risk.
+
+## Download
+
+Get **`esp-miner.bin`** from the [latest release](https://github.com/SrDebiasi/bitaxe-btc-price-screen/releases/latest). The release notes list its SHA-256.
+
+**Tested on:** Bitaxe Gamma 601 (BM1370) with the 128×32 OLED.
+- **Other boards:** like upstream's `esp-miner.bin`, the same binary works on every board (board settings live in NVS, which this doesn't touch). It has only been run on a Gamma, though.
+- **Large color display:** boards with it only show the stats screen, so the price screen doesn't appear there.
+
+## What it does
+
+- **New screen:** a "BTC Price:" screen joins the display rotation, right after the Wi-Fi screen.
+- **Price:** whole US dollars, from mempool.space.
+- **24h change:** `↑` up, `↓` down, `0.00%` flat. It compares against mempool.space's hourly price closest to 24h ago, so it can differ slightly from an exchange's exact 24h figure.
+- **Refresh:** every 5 minutes, with a retry after 1 minute if a fetch fails.
+- **No stale numbers:** the screen shows `--` until the first price arrives, and also when the last good price is more than 30 minutes old. If only the 24h request fails, the price still shows without the change line.
+- **Timing:** the other rotating screens now show for 3 s each (stock is 10 s), and the price screen for 6 s.
+
+## Network and security
+
+The only new network activity is two HTTPS GET requests to mempool.space every 5 minutes:
+
+- `https://mempool.space/api/v1/prices`
+- `https://mempool.space/api/v1/historical-price?currency=USD&timestamp=<24h ago>`. The timestamp comes from the server's own `time` field, so the miner's clock doesn't matter.
+
+How those requests are handled:
+
+- **Verified TLS:** the server certificate is checked against ESP-IDF's built-in CA bundle, the same one the pool TLS connection uses. The URLs are fixed in the firmware and redirects are disabled.
+- **Tight input handling:** responses over 512 bytes are rejected. Only numbers are read, and only a price between $1 and $100M is accepted. Text from the server never reaches the display.
+- **Nothing new on the miner:** no new settings, API endpoints, web UI changes or stored data, so the miner's attack surface on your network is unchanged.
+- **Low priority:** the fetch task only runs on devices with a display, at the lowest task priority.
+- **Privacy:** mempool.space sees your IP address every 5 minutes.
+
+## What changed
+
+All changes are one commit on top of ESP-Miner v2.15.3. See the [diff against upstream](https://github.com/SrDebiasi/bitaxe-btc-price-screen/compare/fb31c4f...price-screen).
+
+| File | Change |
+|---|---|
+| `components/price/` | **New.** Pure logic: parse the mempool.space responses, format `$82,380` and `↓ 1.64%`, check staleness. It has no network or hardware code, so it is unit-tested (19 tests). |
+| `main/tasks/price_task.c`, `.h` | **New.** Task that fetches both prices over HTTPS every 5 minutes. |
+| `main/screen.c` | The price screen, plus the carousel timing (3 s, and 6 s for the price). |
+| `main/main.c` | Starts the price task after Wi-Fi connects, only when a display is present. |
+| `main/CMakeLists.txt` | Registers the new files and the `esp_http_client` dependency. |
+| `test/CMakeLists.txt` | Adds the `price` component to the unit tests. |
+| `readme.md` | This section. |
+
+## Install
+
+Pool, Wi-Fi and all other settings are kept.
+
+**From the web UI (AxeOS):**
+1. Open your Bitaxe's IP in a browser and go to **Update**.
+2. Under **Update Firmware**, click **Browse** and pick `esp-miner.bin`. The file must keep that exact name.
+3. Wait about a minute while it flashes and reboots.
+
+**From a terminal:**
+
+```bash
+curl -X POST --data-binary @esp-miner.bin http://<your-bitaxe-ip>/api/system/OTA
+```
+
+## Going back to official firmware
+
+Download `esp-miner.bin` from the official [ESP-Miner releases](https://github.com/bitaxeorg/ESP-Miner/releases) (v2.15.3 or newer) and flash it the same way. Updating to an official release later replaces this fork in the same way.
+
+Updates are written to whichever of the two firmware slots isn't running, so right after installing this, your previous firmware is still on the device. To switch back to it without uploading anything:
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"partition":"ota_0"}' http://<your-bitaxe-ip>/api/system/boot
+```
+
+Use `ota_0` or `ota_1`, whichever is **not** the `runningPartition` shown at `http://<your-bitaxe-ip>/api/system/info`.
+
+## Build from source
+
+The build is the same as upstream: [ESP-IDF v6.0.2](https://docs.espressif.com/projects/esp-idf/en/v6.0.2/esp32s3/get-started/index.html), plus Node.js 22+ (the web UI is built and embedded into the firmware).
+
+```bash
+git clone --recursive -b price-screen https://github.com/SrDebiasi/bitaxe-btc-price-screen.git
+cd bitaxe-btc-price-screen
+idf.py build    # output: build/esp-miner.bin
+```
+
+The unit tests run in QEMU the same way upstream's CI does (`test-ci`, with `price` added to `TEST_COMPONENTS`). All 91 pass.
+
+## Credits
+
+ESP-Miner is by [OSMU](https://osmu.xyz) and the [bitaxeorg/ESP-Miner](https://github.com/bitaxeorg/ESP-Miner) contributors, licensed under GPL-3.0. This fork is GPL-3.0 as well. Price data comes from [mempool.space](https://mempool.space).
+
+---
+
+# Original ESP-Miner README
+
 [![](https://dcbadge.vercel.app/api/server/3E8ca2dkcC)](https://discord.gg/osmu)
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/bitaxeorg/esp-miner/total)

@@ -11,6 +11,7 @@
 #include "hashrate_monitor_task.h"
 #include "fan_controller_task.h"
 #include "statistics_task.h"
+#include "price_task.h"
 #include "global_state.h"
 #include "system.h"
 #include "http_server.h"
@@ -245,6 +246,13 @@ void app_main(void)
         protocol_coordinator_init(&GLOBAL_STATE);
         if (xTaskCreateWithCaps(protocol_coordinator_task, "protocol coord", 8192, (void *) &GLOBAL_STATE, 5, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
             ESP_LOGE(TAG, "Error creating protocol coordinator task");
+        }
+    }
+
+    // The price is only shown on the display, so skip fetching it without one.
+    if (GLOBAL_STATE.SYSTEM_MODULE.is_screen_active && !GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
+        if (xTaskCreateWithCaps(price_task, "price", 8192, (void *) &GLOBAL_STATE, 1, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+            ESP_LOGE(TAG, "Error creating price task");
         }
     }
 

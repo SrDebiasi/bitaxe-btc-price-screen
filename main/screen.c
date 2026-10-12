@@ -12,6 +12,8 @@
 #include "display.h"
 #include "connect.h"
 #include "esp_timer.h"
+#include "price.h"
+#include "price_task.h"
 
 typedef enum {
     SCR_SELF_TEST,
@@ -26,6 +28,7 @@ typedef enum {
     SCR_STATS,
     SCR_MINING,
     SCR_WIFI,
+    SCR_PRICE,
     MAX_SCREENS,
 } screen_t;
 
@@ -54,7 +57,7 @@ static uint8_t osmu_logo_inverted_map[OSMU_LOGO_INVERTED_SIZE];
 static bool inverted_logos_ready;
 
 static lv_obj_t * screens[MAX_SCREENS];
-static int delays_ms[MAX_SCREENS] = {0, 0, 0, 0, 0, 1000, 3000, 3000, 10000, 10000, 10000, 10000};
+static int delays_ms[MAX_SCREENS] = {0, 0, 0, 0, 0, 1000, 3000, 3000, 3000, 3000, 3000, 3000, 6000};
 
 static int current_screen_time_ms;
 static int current_screen_delay_ms;
@@ -101,6 +104,9 @@ static lv_obj_t *stats_logo_label;
 static lv_obj_t *wifi_rssi_value_label;
 static lv_obj_t *wifi_signal_strength_label;
 static lv_obj_t *wifi_uptime_label;
+
+static lv_obj_t *price_value_label;
+static lv_obj_t *price_change_label;
 
 static lv_obj_t *notification_label;
 static lv_obj_t *identify_image;
@@ -530,6 +536,21 @@ static lv_obj_t * create_scr_wifi() {
     return scr;
 }
 
+static lv_obj_t * create_scr_price() {
+    lv_obj_t * scr = create_flex_screen(3);
+
+    lv_obj_t *title_label = lv_label_create(scr);
+    lv_label_set_text(title_label, "BTC Price:");
+
+    price_value_label = lv_label_create(scr);
+    lv_label_set_text(price_value_label, "--");
+
+    price_change_label = lv_label_create(scr);
+    lv_label_set_text(price_change_label, "");
+
+    return scr;
+}
+
 static void scr_create_overlay()
 {
     identify_image = lv_img_create(lv_layer_top());
@@ -874,6 +895,24 @@ static void screen_update_cb(lv_timer_t * timer)
         current_rssi_value = rssi_value;
     }
 
+    char price_text[16] = "--";
+    char change_text[24] = "";
+    char change_line[32] = "";
+    uint32_t price_usd, price_24h_usd;
+    if (price_task_get_usd(&price_usd, &price_24h_usd)) {
+        price_format_usd(price_usd, price_text, sizeof(price_text));
+        price_format_change(price_usd, price_24h_usd, change_text, sizeof(change_text));
+    }
+    if (change_text[0] != '\0') {
+        snprintf(change_line, sizeof(change_line), "%s (24h)", change_text);
+    }
+    if (strcmp(lv_label_get_text(price_value_label), price_text) != 0) {
+        lv_label_set_text(price_value_label, price_text);
+    }
+    if (strcmp(lv_label_get_text(price_change_label), change_line) != 0) {
+        lv_label_set_text(price_change_label, change_line);
+    }
+
     uint32_t shares_accepted = module->shares_accepted;
     uint32_t shares_rejected = module->shares_rejected;
     uint32_t work_received = module->work_received;
@@ -977,6 +1016,7 @@ esp_err_t screen_start(GlobalState * global_state)
             screens[SCR_STATS] = create_scr_stats();
             screens[SCR_MINING] = create_scr_mining();
             screens[SCR_WIFI] = create_scr_wifi();
+            screens[SCR_PRICE] = create_scr_price();
 
             scr_create_overlay();
 

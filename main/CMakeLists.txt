@@ -48,6 +48,7 @@ SRCS
     "./tasks/scoreboard.c"
     "./tasks/hashrate_monitor_task.c"
     "./tasks/fan_controller_task.c"
+    "./tasks/price_task.c"
     "./thermal/EMC2101.c"
     "./thermal/EMC2103.c"
     "./thermal/EMC2302.c"
@@ -80,6 +81,7 @@ REQUIRES
     "dns_server"
     "stratum"
     "stratum_v2"
+    "price"
 
 PRIV_REQUIRES
     "app_update"
@@ -87,6 +89,7 @@ PRIV_REQUIRES
     "esp_app_format"
     "esp_driver_gpio"
     "esp_event"
+    "esp_http_client"
     "esp_http_server"
     "esp_lcd"
     "esp_netif"
@@ -99,6 +102,7 @@ PRIV_REQUIRES
     "esp_driver_i2c"
     "esp_driver_uart"
     "tcp_transport"
+    "mbedtls"
     "esp_mm"
     "bt"
 
